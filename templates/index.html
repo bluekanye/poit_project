@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IoT System Soil Moisture and Pump</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      padding: 20px;
+      color: #333;
+    }
+
+    h1, h2, h3 {
+      text-align: center;
+    }
+
+    .card {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin: 20px auto;
+      max-width: 1200px;
+    }
+
+    .button-row, .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    button, input[type="submit"] {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background-color: #2196f3;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    input[type="number"] {
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 120px;
+    }
+
+    .mode-button {
+      background-color: #ddd;
+      color: #333;
+    }
+
+    .mode-button.active {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    .pump-button.active-on {
+      background-color: #4CAF50;
+    }
+
+    .pump-button.active-off {
+      background-color: #e53935;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+
+    th {
+      background-color: #2196f3;
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f7f7f7;
+    }
+
+    .multi-form-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .multi-form-grid form {
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 6px;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.05);
+    }
+  </style>
+
+  <script>
+    let currentMode = "auto";
+
+    async function switchMode(mode) {
+      const res = await fetch('/api/set-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      });
+      const result = await res.json();
+      if (result.status === "ok") {
+        currentMode = result.mode;
+        updateModeUI();
+      }
+    }
+
+    async function setPump(state) {
+      await fetch('/api/set-pump', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: state })
+      });
+      updatePumpUI();
+    }
+
+    function updateModeUI() {
+      document.getElementById("btnAuto").classList.toggle("active", currentMode === "auto");
+      document.getElementById("btnManual").classList.toggle("active", currentMode === "manual");
+      document.getElementById("manual-controls").style.display = (currentMode === "manual") ? "block" : "none";
+    }
+
+    function updatePumpUI() {
+      fetch('/api/pump-status')
+        .then(res => res.json())
+        .then(data => {
+          const pump = data.pump;
+          document.getElementById("btnPumpOn").classList.toggle("active-on", pump === 1);
+          document.getElementById("btnPumpOff").classList.toggle("active-off", pump === 0);
+        });
+    }
+
+    function refreshTable() {
+      fetch("/api/latest-list")
+        .then(res => res.json())
+        .then(data => {
+          let html = '';
+          data.forEach(row => {
+            html += `<tr>
+              <td>${row.timestamp}</td>
+              <td>${row.soil}</td>
+              <td>${row.pump}</td>
+            </tr>`;
+          });
+          document.getElementById("table-body").innerHTML = html;
+        });
+    }
+
+    window.onload = function () {
+      fetch('/api/pump-status')
+        .then(res => res.json())
+        .then(data => {
+          currentMode = data.mode;
+          updateModeUI();
+          updatePumpUI();
+        });
+      refreshTable();
+      setInterval(refreshTable, 2000);
+    };
+  </script>
+</head>
+<body>
+
+  <h1>IoT System Soil Moisture and Pump</h1>
+
+  <div class="card">
+    <h3>System Control</h3>
+    <div class="button-row">
+      <form method="POST" action="/open"><button>Open</button></form>
+      <form method="POST" action="/start"><button>Start</button></form>
+      <form method="POST" action="/stop"><button>Stop</button></form>
+      <form method="POST" action="/close"><button>Close</button></form>
+    </div>
+    <ul>
+      <li>Initialized: {{ 'Yes' if state.initialized else 'No' }}</li>
+      <li>Monitoring active: {{ 'Yes' if state.monitoring else 'No' }}</li>
+    </ul>
+    <p>Current session ID: <strong>{{ current_session_id }}</strong></p>
+  </div>
+
+  <div class="card">
+    <h3>Threshold Configuration</h3>
+    <form method="POST" action="/config" class="form-row">
+      <label for="threshold">Threshold (ADC):</label>
+      <input type="number" id="threshold" name="threshold" value="{{ threshold }}" required>
+      <input type="submit" value="Save">
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Session Actions</h3>
+    <div class="multi-form-grid">
+      <form method="GET" action="/view">
+        <input type="number" name="session" placeholder="Session ID" required>
+        <button>List View</button>
+      </form>
+      <form method="GET" action="/chart">
+        <input type="number" name="session" placeholder="Session ID" required>
+        <button>Chart</button>
+      </form>
+      <form method="GET" action="/download">
+        <input type="number" name="session" placeholder="Session ID" required>
+        <button>Download CSV</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Control Mode</h2>
+    <div class="button-row">
+      <button id="btnAuto" class="mode-button" onclick="switchMode('auto')">Automatic</button>
+      <button id="btnManual" class="mode-button" onclick="switchMode('manual')">Manual</button>
+    </div>
+    <div id="manual-controls">
+      <h3>Manual Pump Control</h3>
+      <div class="button-row">
+        <button id="btnPumpOn" class="pump-button" onclick="setPump(1)">Pump ON</button>
+        <button id="btnPumpOff" class="pump-button" onclick="setPump(0)">Pump OFF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Last 10 Measurements</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Soil (ADC)</th>
+          <th>Pump</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>

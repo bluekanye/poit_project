@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Session {{ session }} data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f8f8;
+            padding: 30px;
+            text-align: center;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        table {
+            margin: 0 auto;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 800px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f1f1f1;
+        }
+        .btn {
+            display: inline-block;
+            margin: 20px 10px;
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Session {{ session }} – data tables</h2>
+
+    <a class="btn" href="/download?session={{ session }}">Download</a>
+    <a class="btn" href="/">Back to homescreen</a>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Time</th>
+                <th>Soil(ADC)</th>
+                <th>Pump</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            
+        </tbody>
+    </table>
+
+    <script>
+        function loadSessionData() {
+            fetch("/api/session-data/{{ session }}")
+                .then(res => res.json())
+                .then(data => {
+                    let html = '';
+                    data.reverse().forEach(row => {  
+                        html += `<tr>
+                            <td>${row.id}</td>
+                            <td>${row.timestamp}</td>
+                            <td>${row.soil}</td>
+                            <td>${row.pump}</td>
+                        </tr>`;
+                    });
+                    document.getElementById("table-body").innerHTML = html;
+                });
+        }
+
+        setInterval(loadSessionData, 2000);
+        loadSessionData();
+    </script>
+</body>
+</html>

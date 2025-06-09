@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Soil Moisture & Pump Status Session {{ session }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #eef2f3;
+            padding: 30px;
+            margin: 0;
+            color: #333;
+        }
+
+        h3 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 20px auto;
+            max-width: 900px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .gauges {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+
+        .gauge-box {
+            position: relative;
+            width: 200px;
+        }
+
+        .gauge-value {
+            position: absolute;
+            top: 55%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .gauge-label {
+            margin-top: 10px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        canvas {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 0 4px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+
+    <h3>Soil Moisture & Pump Status Session {{ session }}</h3>
+
+    <div class="card">
+        <div class="gauges">
+            
+            <div class="gauge-box">
+                <canvas id="soilGauge" width="200" height="200"></canvas>
+                <div id="soilValue" class="gauge-value">--%</div>
+                <div class="gauge-label">Moisture</div>
+            </div>
+
+            
+            <div class="gauge-box">
+                <canvas id="pumpGauge" width="200" height="200"></canvas>
+                <div id="pumpValue" class="gauge-value">--</div>
+                <div class="gauge-label">Pump</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <canvas id="myChart" width="800" height="300"></canvas>
+    </div>
+
+    <script>
+        const soilCtx = document.getElementById('soilGauge').getContext('2d');
+        const pumpCtx = document.getElementById('pumpGauge').getContext('2d');
+
+        const soilGauge = new Chart(soilCtx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#4caf50', '#e0e0e0'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                rotation: -90,
+                circumference: 180,
+                cutout: '70%',
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }
+            }
+        });
+
+        const pumpGauge = new Chart(pumpCtx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [0, 1],
+                    backgroundColor: ['#2196f3', '#e0e0e0'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                rotation: -90,
+                circumference: 180,
+                cutout: '70%',
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }
+            }
+        });
+
+        function updateGauges(soilADC, pumpState) {
+            const soilPercent = Math.round((soilADC / 4095) * 100);
+            soilGauge.data.datasets[0].data = [soilPercent, 100 - soilPercent];
+            soilGauge.update();
+            document.getElementById("soilValue").textContent = soilPercent + "%";
+
+            pumpGauge.data.datasets[0].data = [pumpState, 1 - pumpState];
+            pumpGauge.data.datasets[0].backgroundColor[0] = pumpState === 1 ? "#2196f3" : "#aaa";
+            pumpGauge.update();
+            document.getElementById("pumpValue").textContent = pumpState === 1 ? "ON" : "OFF";
+        }
+
+        let myChart;
+
+        function updateChartAndGauges() {
+            fetch("/chart-data?session={{ session }}")
+                .then(res => res.json())
+                .then(data => {
+                    if (!myChart) {
+                        const ctx = document.getElementById('myChart').getContext('2d');
+                        myChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: data.labels,
+                                datasets: [
+                                    {
+                                        label: 'Soil ADC',
+                                        data: data.soil,
+                                        borderColor: 'green',
+                                        tension: 0.3
+                                    },
+                                    {
+                                        label: 'Pump',
+                                        data: data.pump,
+                                        borderColor: 'blue',
+                                        tension: 0.3,
+                                        yAxisID: 'y1'
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        title: { display: true, text: 'Soil ADC' }
+                                    },
+                                    y1: {
+                                        position: 'right',
+                                        beginAtZero: true,
+                                        max: 1,
+                                        ticks: { stepSize: 1 },
+                                        title: { display: true, text: 'Pump (0/1)' },
+                                        grid: { drawOnChartArea: false }
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        myChart.data.labels = data.labels;
+                        myChart.data.datasets[0].data = data.soil;
+                        myChart.data.datasets[1].data = data.pump;
+                        myChart.update();
+                    }
+
+                    const lastSoil = data.soil.at(-1);
+                    const lastPump = data.pump.at(-1);
+                    updateGauges(lastSoil, lastPump);
+                });
+        }
+
+        setInterval(updateChartAndGauges, 2000);
+        updateChartAndGauges();
+    </script>
+</body>
+</html>
